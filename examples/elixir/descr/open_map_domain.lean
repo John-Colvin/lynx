@@ -81,7 +81,7 @@ theorem domsV_domL (d : String) {v : Term} (he : (level t n).E v) : DomsV (level
     · simp [h, he]
     · simp [h, (level t n).ef.term]
   · simp only [domL, domainKinds, List.map_cons, List.map_nil]
-    simp (config := { decide := true }) [atoms_cmp, Ord.compare, Lynx.Term.string_compare_eq, compareOfLessAndEq]
+    simp (config := { decide := true }) [atoms_cmp, Ord.compare]
 
 theorem usort_one (x : Term) : Erlang.lists.«usort/1» (Term.list [x]) = .ok (Term.list [x]) := by
   rw [Erlang.lists.«usort/1».eq_def]; rfl
