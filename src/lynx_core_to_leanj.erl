@@ -359,7 +359,7 @@ purity_rank(concurrent) -> 3.
 %% Unsupported constructs return their annotations and pretty-printed Core as a UTF-8 binary.
 %% Dispatch is `none`, or the protocol the module implements and calls, its
 %% definitions, and those of its functions that are cut off.
--spec translate(module(), #{{atom(), arity()} => {function | cutoff, cerl:c_fun()} | {law, map()}}, [{atom(), arity()}], map(),
+-spec translate(module(), #{{atom(), arity()} => {function | cutoff | external, cerl:c_fun()} | {law, map()}}, [{atom(), arity()}], map(),
                 #{term() => binary()}, map(), [{atom(), arity()}], [mfa()],
                 {term(), fun((term(), module(), atom(), arity(), list(), map()) ->
                     {{purity(), boolean()}, map(), term()} | local)},
@@ -421,6 +421,8 @@ translate_def(Name, {function, #c_fun{anno = Anno, vars = Vars0, body = Body0}},
     end;
 translate_def(Name, {cutoff, #c_fun{anno = Anno, vars = Vars}}, State) ->
     translate_definition(Name, Anno, Vars, cutoff, State);
+translate_def(Name, {external, #c_fun{anno = Anno, vars = Vars}}, State) ->
+    translate_definition(Name, Anno, Vars, external, State);
 translate_def(Name, {law, #{name := {_, Params}, anno := Anno, ensures := Ensures, proof := Proof} = Law}, State0) ->
     {_, Arity} = Name,
     {Requirement, State1} = case maps:find(requires, Law) of
@@ -544,6 +546,14 @@ translate_definition(Name, Anno, Vars, Definition, State0) ->
                 ~"params" => [variable(Var) || Var <- Vars],
                 ~"body" => node(~"cutoff", Anno, #{})
             }), State1};
+        external ->
+            {Function, _} = Name,
+            Call = external_node(State1#state.module, Function, [variable(Var) || Var <- Vars], Anno),
+            {node(~"def", Anno, #{
+                ~"name" => function_name(Name),
+                ~"params" => [variable(Var) || Var <- Vars],
+                ~"body" => Call
+            }), State1#state{purity = concurrent}};
         {function, Body} ->
             {Translated, Next} = expression(Body, State1),
             TranslatedBody = lists:foldr(fun(Size, Acc) ->
@@ -799,6 +809,12 @@ remote_call(Module, Name, Args, Anno, State0) ->
         local when Module =:= State0#state.module ->
             expression(#c_apply{anno = Anno, op = #c_var{name = {Name, Arity}}, args = Args},
                 State0);
+        %% An external call is a request, so the caller is concurrent.
+        {external, NewContext} ->
+            {TranslatedArgs, State1} = lists:mapfoldl(fun value/2,
+                State0#state{remote = {NewContext, Callback}}, Args),
+            Call = external_node(Module, Name, TranslatedArgs, Anno),
+            {Call, call_purity({concurrent, false}, State1)};
         {Callee, NewFuns, NewContext} ->
             {TranslatedArgs, State1} = lists:mapfoldl(fun value/2,
                 State0#state{funs = NewFuns, remote = {NewContext, Callback}}, Args),
@@ -1701,6 +1717,11 @@ var_node(Name, Anno) ->
 error_node(Reason, Anno) ->
     node(~"raise", Anno, #{~"class" => ~"error",
         ~"reason" => node(~"atom", Anno, #{~"value" => atom_to_binary(Reason, utf8)})}).
+
+%% An external call: the request {Module, Function, Args}.
+external_node(Module, Name, Args, Anno) ->
+    node(~"external", Anno, #{~"module" => atom_to_binary(Module, utf8),
+        ~"name" => atom_to_binary(Name, utf8), ~"args" => Args}).
 
 local_call_node(Name, Args, Anno) ->
     node(~"local_call", Anno, #{~"name" => Name, ~"args" => Args}).

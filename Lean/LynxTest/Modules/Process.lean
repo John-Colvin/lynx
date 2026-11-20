@@ -340,6 +340,31 @@ theorem blocked_child_prevents_completion :
 theorem blocking_is_not_an_exception :
     Lynx.sequential (tryCatch receiveAny (fun _ => .ok (.atom "caught"))) = .deadlock := by cbv
 
+private def externalCall : Result :=
+  .request (.external (.tuple #[.atom "store", .atom "fetch", .list [.integer 7]])) Result.ofReply
+
+/-- Lynx does not answer an external call, so the calling process blocks. -/
+theorem external_call_deadlocks : Lynx.sequential externalCall = .deadlock := by cbv
+
+/-- The run is a deadlock when a child is blocked on an external call. -/
+theorem external_call_in_child_deadlocks :
+    Result.run (Result.schedule {} externalCall (fun _ => .ok (Term.atom "done"))) {} =
+      (.deadlock, {}) := by cbv
+
+theorem external_reply_returns (value : Term) :
+    Result.ofReply (.tuple #[.atom "ok", value]) = .ok value := by rfl
+
+/-- An `error`, `throw` or `exit` reply raises with its reason. -/
+theorem external_reply_raises (reason : Term) :
+    Result.ofReply (.tuple #[.atom "error", reason]) = .error (.error reason) ∧
+      Result.ofReply (.tuple #[.atom "throw", reason]) = .error (.throw reason) ∧
+      Result.ofReply (.tuple #[.atom "exit", reason]) = .error (.exit reason) := by
+  exact ⟨rfl, rfl, rfl⟩
+
+theorem external_reply_of_another_shape_raises :
+    Result.ofReply (.atom "ok") =
+      .error (.error (.tuple #[.atom "bad_external_reply", .atom "ok"])) := by rfl
+
 /-- A selected receive body still raises in the receiving process. -/
 theorem receive_body_exception_is_caught :
     Lynx.sequential (do

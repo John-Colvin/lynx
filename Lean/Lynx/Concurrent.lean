@@ -665,6 +665,12 @@ inductive Answer (β : Type) : Type 1 where
               processId fun process => { process with cancels := process.cancels + 1 })
       | none => .reply (.atom "false") state
 
+  -- Lynx has no answer for an external call. The process blocks, like one in a
+  -- receive with no matching message, and it handles signals while it is blocked.
+  | .external _ =>
+      .continue (.receive .infinity (fun _ _ => (none : Option Unit)) fun _ => next (.atom "undefined"))
+        state
+
 /-- The runtime of a single process continuing from its environment, with the
 time elapsed when timers are canceled. -/
 @[expose] def State.initial (env : Environment) (elapsed : PID → Nat → Nat := fun _ _ => 0) :

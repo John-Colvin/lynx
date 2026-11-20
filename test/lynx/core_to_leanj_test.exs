@@ -22,6 +22,59 @@ defmodule Lynx.CoreToLeanjTest do
             }, []} = translate(defs)
   end
 
+  test "the body of an external is a request with its arguments" do
+    body = :cerl.c_primop(:cerl.c_atom(:unsupported_body), [])
+    defs = definitions([definition(:entry, body)])
+    {:function, core} = defs[{:entry, 1}]
+    defs = Map.put(defs, {:entry, 1}, {:external, core})
+
+    assert {:ok,
+            %{
+              {:entry, 1} => %{
+                purity: :concurrent,
+                local_calls: [],
+                translation: %{
+                  "kind" => "def",
+                  "name" => "entry",
+                  "params" => [param],
+                  "body" => %{
+                    "kind" => "external",
+                    "module" => "example",
+                    "name" => "entry",
+                    "args" => [param]
+                  }
+                }
+              }
+            }, []} = translate(defs)
+  end
+
+  test "a remote call to an external is translated at the call site" do
+    body = :cerl.c_call(:cerl.c_atom(:store), :cerl.c_atom(:fetch), [:cerl.c_var(0)])
+    callback = fn calls, :store, :fetch, 1, _, _ -> {:external, calls} end
+
+    assert {:ok,
+            %{
+              {:entry, 1} => %{
+                purity: :concurrent,
+                translation: %{
+                  "params" => [param],
+                  "body" => %{
+                    "kind" => "external",
+                    "module" => "store",
+                    "name" => "fetch",
+                    "args" => [param]
+                  }
+                }
+              }
+            }, _, _, _, []} =
+             core_translate(
+               :example,
+               definitions([definition(:entry, body)]),
+               [{:entry, 1}],
+               callback
+             )
+  end
+
   test "calls nested in arguments are bound in order before the call" do
     abs = :cerl.c_call(:cerl.c_atom(:erlang), :cerl.c_atom(:abs), [:cerl.c_var(0)])
     neg = :cerl.c_call(:cerl.c_atom(:erlang), :cerl.c_atom(:-), [:cerl.c_var(0)])

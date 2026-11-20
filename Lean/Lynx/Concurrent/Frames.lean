@@ -827,6 +827,7 @@ private def State.requestEffect (state : State) (processId : PID) : Request → 
           (Effect.retime (Kernel.filter (·.reference != reference))).andThen
             (.modify processId fun process => { process with cancels := process.cancels + 1 })
       | none => {}
+  | .external _ => {}
 
 private theorem Realizes.request (state : State) (processId : PID) (next : Term → Result β) (query : Request) :
     Realizes (state.requestEffect processId query) state (state.request processId next query).state := by
@@ -888,6 +889,7 @@ private theorem Realizes.request (state : State) (processId : PID) (next : Term 
     cases found : Kernel.find? (·.reference == reference) state.timers with
     | none => exact Realizes.refl _
     | some timer => exact (Realizes.retime _ _).andThen (Realizes.modify _ _ _)
+  | external call => exact Realizes.refl _
 
 /-- The effect of `State.spawnWith`: the parent's record changes and the child's starts. -/
 private def State.spawnEffect (state : State) (processId : PID) (options : SpawnOptions) : Effect :=

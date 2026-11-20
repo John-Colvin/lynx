@@ -47,6 +47,33 @@ defmodule Lynx.RunnerTest do
   end
 
   @tag :tmp_dir
+  test "renders an external call as a request followed by ofReply", %{tmp_dir: tmp_dir} do
+    external = %{
+      "kind" => "external",
+      "module" => "store",
+      "name" => "fetch",
+      "args" => [%{"kind" => "atom", "value" => "key", "span" => []}],
+      "span" => [4, 15]
+    }
+
+    files = [
+      file(@literal_erl, "Elixir.External", [definition("entry", external, "concurrent")])
+    ]
+
+    assert [%{status: :ok, diagnostics: []}] =
+             Lynx.Commands.verify!(@lean_dir, files, debug_dir: tmp_dir, debug: :lean)
+
+    assert File.read!(Path.join(tmp_dir, "Elixir/External.lean")) =~ """
+           def «entry/0» (lynxDispatch : Lynx.Dispatcher) : Lynx.Result Lynx.Term :=
+             Lynx.Result.request
+               (Lynx.Request.external
+                 (Lynx.Term.tuple
+                   #[Lynx.Term.atom "store", Lynx.Term.atom "fetch", Lynx.Term.list [Lynx.Term.atom "key"]]))
+               Lynx.Result.ofReply
+           """
+  end
+
+  @tag :tmp_dir
   test "exports verified declarations only when every file verifies", %{tmp_dir: tmp_dir} do
     files = [file(@literal_erl, "Elixir.Exported", [definition("value", success())])]
     path = Path.join([tmp_dir, "nested", "export.ndjson"])

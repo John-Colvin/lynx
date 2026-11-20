@@ -196,6 +196,11 @@ inductive Request where
   `false` once it fired, was canceled, or its destination exited. A fired
   timer's message may still be queued. -/
   | cancelTimer (reference : List Nat)
+  /-- A call to a function listed in `externals`, as `{Module, Function, Args}`.
+  The reply is `{ok, Value}`, or `{error | throw | exit, Reason}` to raise. Lynx
+  does not answer this request, so the calling process blocks. A project that
+  models the called system in Lean decides which replies are possible. -/
+  | external (call : Term)
 deriving Repr
 
 /-- A resumable process computation. Bind stores continuations so scheduling
@@ -677,6 +682,16 @@ namespace Lynx.Result
   match reply with
   | .ok value => .ok value
   | .error exception => .error exception
+
+/-- Turns the reply to an external call into a result. `{ok, Value}` returns
+`Value`. `{error | throw | exit, Reason}` raises, so a `try` around the call
+catches it. Any other reply raises `{bad_external_reply, Reply}`. -/
+@[expose] public def ofReply : Term → Result Term
+  | .tuple ⟨[.atom "ok", value]⟩ => .ok value
+  | .tuple ⟨[.atom "error", reason]⟩ => .error (.error reason)
+  | .tuple ⟨[.atom "throw", reason]⟩ => .error (.throw reason)
+  | .tuple ⟨[.atom "exit", reason]⟩ => .error (.exit reason)
+  | reply => .error (.error (.tuple #[.atom "bad_external_reply", reply]))
 
 /-- Extract a completed call using a kernel-checked purity proof. -/
 @[expose] public def toExcept (computation : Result α) (pure : IsPure computation) : Except Exception α :=

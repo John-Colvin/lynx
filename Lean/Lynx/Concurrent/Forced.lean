@@ -560,6 +560,7 @@ private theorem request (changed : state.Changes processId related state') (unse
     split
     · exact ⟨by rw [changed.2.2.2], (changed.timers _).modify differ _⟩
     · exact ⟨rfl, changed⟩
+  | external call => exact ⟨rfl, changed⟩
 
 
 private theorem exitSignal (changed : state.Changes processId related state') {target : PID}
@@ -2046,6 +2047,7 @@ private theorem requestSelf
     split
     · exact ⟨by rw [changed.2.2.2], (changed.timers _).queue_modify _ (fun _ => ⟨rfl, rfl⟩) (fun _ _ => rfl)⟩
     · exact ⟨rfl, changed⟩
+  | external call => exact ⟨rfl, changed⟩
 
 /-- A process spawns a child, after handling its oldest signal changed its queue, mailbox and links. -/
 private theorem spawnSelf
@@ -3748,6 +3750,7 @@ private theorem request (distinct : state.Distinct) (processId : PID) {β : Type
     split
     · exact (distinct.timers _).modify fun _ _ nodup => nodup
     · exact distinct
+  | external call => exact distinct
 
 private theorem exitSignal (distinct : state.Distinct) (target source : PID) (reason : Term) (linked normalKills : Bool) :
     (state.exitSignal target source reason linked normalKills).1.Distinct := by
@@ -4159,6 +4162,7 @@ private theorem request (unborn : state.Unborn) (processId : PID) {β : Type} (n
     split
     · exact keep (unborn.timers _) fun _ => ⟨rfl, rfl⟩
     · exact unborn
+  | external call => exact unborn
 
 end State.Unborn
 
@@ -4767,6 +4771,7 @@ private theorem request (covers : state.Covers watcher reference count) (shape :
     split
     · exact (covers.timers _).same (fun _ => rfl) (fun _ => rfl) (fun _ => rfl)
     · exact covers
+  | external call => exact covers
 
 private theorem exitSignal (covers : state.Covers watcher reference count) (target source : PID) (reason : Term)
     (linked normalKills : Bool) : (state.exitSignal target source reason linked normalKills).1.Covers watcher reference count := by

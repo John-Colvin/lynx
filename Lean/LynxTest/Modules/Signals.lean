@@ -35,7 +35,9 @@ private def functions : Term.FunTable := [
   { module := "test", name := "raises", arity := 0, entry := .effectful fun _ _ _ =>
       .error (.error (.atom "boom")) },
   { module := "test", name := "returns", arity := 0, entry := .effectful fun _ _ _ => .ok .nil },
-  { module := "test", name := "waits", arity := 0, entry := .effectful fun _ _ _ => receiveAny }]
+  { module := "test", name := "waits", arity := 0, entry := .effectful fun _ _ _ => receiveAny },
+  { module := "test", name := "calls", arity := 0, entry := .effectful fun _ _ _ =>
+      .request (.external (.tuple #[.atom "store", .atom "fetch", .list []])) Result.ofReply }]
 
 private def dispatcher : Dispatcher := Dispatcher.ofTable functions 1
 
@@ -53,6 +55,7 @@ private def suicidal : Dispatcher := Dispatcher.ofTable [
 private def returns : Term := .function "test" "returns" 0 #[]
 private def raises : Term := .function "test" "raises" 0 #[]
 private def waits : Term := .function "test" "waits" 0 #[]
+private def calls : Term := .function "test" "calls" 0 #[]
 
 /-- Accept exactly one outcome, for proofs over every schedule. -/
 private def only (expected : Outcome Term) (actual : Outcome Term) : Bool :=
@@ -150,6 +153,22 @@ theorem killed_root_keeps_environment :
 theorem kill_cannot_be_trapped :
     Concurrent.check (only (.ok (down [1] [1] (.atom "killed")))) 32 (.start {} (do
       let child ← «spawn_monitor/1» dispatcher waits
+      match child with
+      | .tuple ⟨[pid, _]⟩ =>
+        let _ ← «exit/2» dispatcher pid (.atom "kill")
+        receiveAny
+      | _ => pure .nil)) = true := by decide +kernel
+
+/-- An external call blocks its process under every schedule. -/
+theorem external_call_blocks :
+    Concurrent.check (only .deadlock) 32 (.start {} (do
+      let _ ← «spawn/1» dispatcher calls
+      receiveAny)) = true := by decide +kernel
+
+/-- A process blocked on an external call can be killed. -/
+theorem external_call_can_be_killed :
+    Concurrent.check (only (.ok (down [1] [1] (.atom "killed")))) 32 (.start {} (do
+      let child ← «spawn_monitor/1» dispatcher calls
       match child with
       | .tuple ⟨[pid, _]⟩ =>
         let _ ← «exit/2» dispatcher pid (.atom "kill")

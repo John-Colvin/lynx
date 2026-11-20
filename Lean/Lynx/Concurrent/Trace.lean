@@ -115,6 +115,7 @@ private def showRequest (processId : PID) (reply : Option Term) : Request → St
       s!"{showPid processId} starts timer {showReply reply} sending {showTerm message} to {showPid destination}"
   | .cancelTimer reference =>
       s!"{showPid processId} cancels timer {showReference reference}, getting {showReply reply}"
+  | .external call => s!"{showPid processId} calls {showTerm call}, getting {showReply reply}"
 
 /-- A process handling a signal from its queue. -/
 private def showHandle (receiver : PID) (entry : Entry) : String :=

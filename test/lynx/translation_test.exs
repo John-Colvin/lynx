@@ -1103,6 +1103,60 @@ defmodule Lynx.TranslationTest do
       end
     end
 
+    test "externals are not translated and their modules are not imported" do
+      core =
+        cerl("""
+        -module(example).
+        -export([entry/1]).
+        entry(X) -> {store:fetch(X), local(X)}.
+        local(X) -> store:write(X).
+        """)
+
+      translation =
+        Translation.new(externals: [{:store, :fetch, 1}, {:example, :local, 1}])
+        |> Translation.add({"example.erl", core})
+        |> Translation.translate(:example, [{:entry, 1}])
+
+      # store is external, and the body of local/1, which calls store:write/1,
+      # is not translated either.
+      assert Map.keys(translation.modules) == [:example]
+
+      assert [
+               %{
+                 "module" => "Erlang.example",
+                 "imports" => [],
+                 "contents" => [
+                   %{
+                     "name" => "local",
+                     "purity" => "concurrent",
+                     "params" => [param],
+                     "body" => %{
+                       "kind" => "external",
+                       "module" => "example",
+                       "name" => "local",
+                       "args" => [param]
+                     }
+                   },
+                   %{
+                     "name" => "entry",
+                     "purity" => "concurrent",
+                     "body" => %{
+                       "computation" => %{
+                         "kind" => "external",
+                         "module" => "store",
+                         "name" => "fetch",
+                         "args" => [%{"kind" => "var"}]
+                       },
+                       "body" => %{
+                         "computation" => %{"kind" => "local_call", "name" => "local"}
+                       }
+                     }
+                   }
+                 ]
+               }
+             ] = Translation.assemble(translation, cache: false)
+    end
+
     test "raises on unsupported binary segments" do
       # No source syntax yields an unknown segment type, so rewrite the Core.
       unknown_type = fn node ->

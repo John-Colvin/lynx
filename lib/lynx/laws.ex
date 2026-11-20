@@ -120,6 +120,14 @@ defmodule Lynx.Laws do
   no handler catches; successful-return proofs must show they are unreachable.
   No return values or Erlang exceptions are assumed for a cutoff.
 
+  Pass `externals: [{module, function, arity}]` for functions that call a system
+  outside the program, such as a database. Lynx does not translate them. Each
+  call becomes the request `Lynx.Request.external {Module, Function, Args}`. The
+  reply `{ok, Value}` returns `Value`, and `{error | throw | exit, Reason}`
+  raises. Lynx does not answer these requests, so a law cannot prove that such a
+  call returns. The option is for projects that use the translated Lean code and
+  model the outside system themselves.
+
   Pass `dynamic: [{module, function, arity}]` to declare the functions that calls
   by name may reach, as with `Lynx.Case.dynamic/1`.
 

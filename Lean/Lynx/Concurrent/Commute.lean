@@ -443,6 +443,8 @@ receiver is live, as a live receiver keeps every signal. -/
   | .startTimer destination _ _ =>
       some ([(processId, Field.refCounter, Field.refCounter), (destination, Field.live, 0)], true)
   | .cancelTimer _ => some ([(processId, Field.cancels, Field.cancels)], true)
+  -- An external call has no frames, so its step is compared by evaluating it.
+  | .external _ => none
 
 /-- Every field. -/
 @[expose] def Field.all : Nat := 131071

@@ -5,6 +5,7 @@ defmodule Lynx.Translation do
             postludes: [],
             termination_suffixes: %{},
             cutoffs: MapSet.new(),
+            externals: MapSet.new(),
             dynamic: [],
             modules: %{},
             funs: %{},
@@ -75,6 +76,7 @@ defmodule Lynx.Translation do
       postludes: Keyword.get(opts, :postludes, []),
       termination_suffixes: Keyword.get(opts, :termination_suffixes, %{}),
       cutoffs: cutoffs,
+      externals: MapSet.new(Keyword.get(opts, :externals, [])),
       dynamic: Enum.to_list(Keyword.get(opts, :dynamic, []))
     }
   end
@@ -129,13 +131,19 @@ defmodule Lynx.Translation do
       validate_function!(module, name, function, arity, fn -> [file: module.file] end)
     end
 
+    # A local call to a cutoff or an external goes through its definition. A
+    # remote call to an external is translated at the call site instead.
+    replaced =
+      Enum.map(translation.cutoffs, &{&1, :cutoff}) ++
+        Enum.map(translation.externals, &{&1, :external})
+
     definitions =
-      Enum.reduce(translation.cutoffs, module.definitions, fn
-        {^name, function, arity}, definitions ->
+      Enum.reduce(replaced, module.definitions, fn
+        {{^name, function, arity}, kind}, definitions ->
           validate_function!(module, name, function, arity, fn -> [file: module.file] end)
 
           Map.update!(definitions, {function, arity}, fn
-            {:function, core} -> {:cutoff, core}
+            {:function, core} -> {kind, core}
           end)
 
         _, definitions ->
@@ -210,16 +218,26 @@ defmodule Lynx.Translation do
        ) do
     translation = %{translation | funs: funs}
 
-    translation =
-      if module == caller do
-        translation
-      else
-        update_in(translation.external_calls[caller], fn
-          nil -> MapSet.new([module])
-          set -> MapSet.put(set, module)
-        end)
-      end
+    # A remote call to an external is translated at the call site, so the
+    # external's module is not translated and not imported.
+    if {module, function, arity} in translation.externals do
+      {:external, translation}
+    else
+      translation =
+        if module == caller do
+          translation
+        else
+          update_in(translation.external_calls[caller], fn
+            nil -> MapSet.new([module])
+            set -> MapSet.put(set, module)
+          end)
+        end
 
+      builtin_or_translated(translation, caller, module, function, arity, span_anno)
+    end
+  end
+
+  defp builtin_or_translated(translation, caller, module, function, arity, span_anno) do
     case lean_bif(module, function, arity) do
       {:ok, purity} ->
         translation = put_in(translation.builtin_modules[module], true)

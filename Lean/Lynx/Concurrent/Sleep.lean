@@ -596,6 +596,7 @@ private theorem State.requestEffect_steady (state : State) (processId : PID) (qu
   · split
     · exact (Effect.Steady.retime _).andThen (by steady_modify)
     · exact Effect.Steady.empty
+  · exact Effect.Steady.empty
 
 /-- Spawning keeps every live record but the parent's and the child's. -/
 private theorem State.spawnEffect_steady (state : State) (processId : PID) (options : SpawnOptions)

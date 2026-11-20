@@ -736,6 +736,20 @@ private partial def term (map : FileMap) (parent : Span) (pattern : Bool)
     fields j ["kind", "span"]
     unless !pattern do throw "translation cutoff is only valid in computations"
     embedPure ⟨(mkIdent ``Lynx.Except.cutoff).raw⟩
+  | "external" => do
+    fields j ["kind", "module", "name", "args", "span"]
+    unless !pattern do throw "external call is only valid in computations"
+    let args ← (← arr j "args").mapM (term map info false)
+    let module : TSyntax `term := ⟨Syntax.mkStrLit (← str j "module")⟩
+    let name : TSyntax `term := ⟨Syntax.mkStrLit (← str j "name")⟩
+    let request := mkIdent ``Lynx.Result.request
+    let external := mkIdent ``Lynx.Request.external
+    let tuple := mkIdent ``Lynx.Term.tuple
+    let atom := mkIdent ``Lynx.Term.atom
+    let list := mkIdent ``Lynx.Term.list
+    let ofReply := mkIdent ``Lynx.Result.ofReply
+    pure (Unhygienic.run
+      `($request ($external ($tuple #[$atom $module, $atom $name, $list [$args,*]])) $ofReply))
   | "atom" => do
     fields j ["kind", "value", "span"]
     let literal : TSyntax `term := ⟨Syntax.mkStrLit (← str j "value")⟩
